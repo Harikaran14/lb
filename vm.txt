@@ -1,0 +1,551 @@
+Exercise 5 — Virtual Instances, Server Consolidation and Fault Tolerance
+Follow these steps from the beginning in order.
+Part 1: Create Virtual Machines
+Step 1. Open VMware Workstation Pro 17 and start your existing Ubuntu VM.
+Step 2. Clone the VM.
+Right-click Ubuntu VM
+→ Manage
+→ Clone
+→ Create a Full Clone
+→ Finish
+
+
+Create VM1, VM2, VM3 and, if possible, a separate Load Balancer VM.
+Step 3. Power on all VMs.
+Step 4. Install Apache on VM1, VM2 and VM3. Run on each VM:
+sudo apt update
+sudo apt install apache2 -y
+sudo systemctl enable apache2
+sudo systemctl status apache2
+
+
+Step 5. Change each server's webpage.
+sudo nano /var/www/html/index.html
+
+
+Enter different content on each VM:
+VM1:
+<h1>Web Server 1</h1>
+
+
+VM2:
+<h1>Web Server 2</h1>
+
+
+VM3:
+<h1>Web Server 3</h1>
+
+
+Save using Ctrl+O, Enter, Ctrl+X.
+Step 6. Find each VM's IP address.
+ifconfig
+
+
+If ifconfig is unavailable:
+ip addr
+
+
+Record the IP addresses of VM1, VM2, VM3 and the Load Balancer VM.
+
+Part 2: Configure Load Balancing
+Step 7. On the Load Balancer VM, install HAProxy.
+sudo apt update
+sudo apt install haproxy -y
+
+
+Step 8. Open the configuration file.
+sudo nano /etc/haproxy/haproxy.cfg
+
+
+Add the following configuration at the end:
+frontend http_front
+    bind *:80
+    default_backend http_back
+
+backend http_back
+    balance roundrobin
+    server vm1 <VM1_IP>:80 check
+    server vm2 <VM2_IP>:80 check
+    server vm3 <VM3_IP>:80 check
+
+
+Replace <VM1_IP>, <VM2_IP> and <VM3_IP> with the actual IP addresses.
+Step 9. Restart and enable HAProxy.
+sudo systemctl restart haproxy
+sudo systemctl enable haproxy
+sudo systemctl status haproxy
+
+
+Step 10. Open a browser and enter:
+http://<LOAD_BALANCER_IP>
+
+
+Refresh the page to test the load balancer. Ensure the VMs can communicate over the network.
+
+Part 3: Server Consolidation
+Step 11. Open VMware and inspect the VMs.
+Select VM → Edit Virtual Machine Settings
+
+
+Check CPU and memory allocations.
+Step 12. Select a VM with sufficient resources to host the required workloads.
+Step 13. Copy the required application files/services to the selected VM and start the services there.
+Step 14. Verify that the migrated services work correctly.
+Step 15. Power off and remove unused VMs only after confirming the migrated services work.
+Right-click unused VM → Power Off
+Right-click unused VM → Remove
+
+
+Step 16. Check resource usage on the consolidated Ubuntu VM.
+top
+
+
+Optional:
+htop
+
+
+
+Part 4: Fault Tolerance
+Step 17. Create a full clone of the critical VM.
+VM → Manage → Clone → Create a Full Clone
+
+
+Step 18. Synchronize files to the backup VM.
+rsync -av /source_directory/ user@<BACKUP_VM_IP>:/destination_directory/
+
+
+Example:
+rsync -av /var/www/html/ user@192.168.1.30:/var/www/html/
+
+
+Replace the example IP with the backup VM's IP. SSH access and rsync must be available.
+Step 19. Take a VMware snapshot.
+Select VM → VM → Snapshot → Take Snapshot
+
+
+Enter a name such as:
+Pre-Consolidation Snapshot
+
+
+Step 20. Verify the backup files and snapshot.
+Result: Virtual instances, load balancing, server consolidation and fault-tolerance mechanisms are configured. UIT2702-Cloud-LabManual_Sample.pdf
+
+
+Exercise 6 — Task Scheduling and Load Balancing
+Follow these steps from the beginning.
+Part 1: Task Scheduling Using Cron
+Step 1. Open VMware Workstation and power on an Ubuntu VM.
+Step 2. Open the Ubuntu Terminal and create a script.
+nano script.sh
+
+
+Enter:
+#!/bin/bash
+echo "Hello Selcia"
+
+
+Save using Ctrl+O, Enter, Ctrl+X.
+Step 3. Make the script executable.
+chmod +x script.sh
+
+
+Step 4. Find the full path of your current directory.
+pwd
+
+
+For example, if it prints /home/student, the script path is /home/student/script.sh.
+Step 5. Open the cron table.
+crontab -e
+
+
+If prompted, select your preferred editor.
+Step 6. Add the following line, replacing /home/student with your actual directory.
+*/1 * * * * /home/student/script.sh >> /home/student/output.log 2>&1
+
+
+Save and exit the editor.
+Step 7. Wait one or two minutes, then check the output.
+cat /home/student/output.log
+
+
+Expected output:
+Hello Selcia
+Hello Selcia
+
+
+Step 8. Check the cron logs.
+tail -f /var/log/syslog | grep CRON
+
+
+Press Ctrl+C to stop monitoring.
+
+Part 2: Load Balancing Using HAProxy
+Step 9. Ensure Apache is running on VM1, VM2 and VM3.
+If not installed, run on each web server:
+sudo apt update
+sudo apt install apache2 -y
+sudo systemctl enable --now apache2
+
+
+Step 10. Install HAProxy on the Load Balancer VM.
+sudo apt update
+sudo apt install haproxy -y
+
+
+Step 11. Open the HAProxy configuration file.
+sudo nano /etc/haproxy/haproxy.cfg
+
+
+Add:
+frontend http_front
+    bind *:80
+    default_backend http_back
+
+backend http_back
+    balance roundrobin
+    server vm1 <VM1_IP>:80 check
+    server vm2 <VM2_IP>:80 check
+    server vm3 <VM3_IP>:80 check
+
+
+Replace the placeholders with the actual web-server IP addresses.
+Step 12. Restart and enable HAProxy.
+sudo systemctl restart haproxy
+sudo systemctl enable haproxy
+sudo systemctl status haproxy
+
+
+Step 13. Test in your browser.
+http://<LOAD_BALANCER_IP>
+
+
+Refresh the page and check the response.
+
+Part 3: Advanced Scheduling (Optional)
+Step 14. Create the first script.
+nano script1.sh
+
+
+Enter:
+#!/bin/bash
+echo "Running CPU-intensive task in script 1"
+
+
+Save and exit.
+Step 15. Create the second script.
+nano script2.sh
+
+
+Enter:
+#!/bin/bash
+echo "Logging system information in script 2"
+date >> /home/student/system.log
+
+
+Replace /home/student with your actual home directory.
+Step 16. Make both scripts executable.
+chmod +x script1.sh script2.sh
+
+
+Step 17. Open cron.
+crontab -e
+
+
+Add these lines, replacing the example paths with your actual paths:
+*/1 * * * * nice -n 10 /home/student/script1.sh >> /home/student/output-pr.log 2>&1
+*/1 * * * * nice -n 5 /home/student/script2.sh >> /home/student/output-pr.log 2>&1
+
+
+Step 18. Check the output.
+cat /home/student/output-pr.log
+
+
+Check the system log created by script2:
+cat /home/student/system.log
+
+
+Result: Cron-based task scheduling, HAProxy load balancing and optional priority-based scheduling are configured
+
+
+
+# Exercise 7 — Hypervisor Clustering in a Cloud Environment
+
+Follow these steps in order for your lab implementation, based on Exercise 7 in your lab manual. The manual uses VMware Workstation to create VMs that act as hypervisor hosts, with Proxmox VE as an example hypervisor.&#x20;
+
+UIT2702-Cloud-LabManual_Sample.pdf
+
+
+
+Important: VMware Workstation alone does not provide a complete live-migration and high-availability cluster. For actual clustering, use Proxmox VE on the hosts and configure shared storage and cluster networking as required. The manual's VM-copy method is a simulation, not live migration.
+
+## Part 1: Setting Up a Hypervisor Cluster
+
+### Task 1: Set Up Hypervisor Hosts
+
+Step 1. Create two virtual machines in VMware Workstation.
+
+```
+VMware Workstation
+→ File
+→ New Virtual Machine
+→ Typical
+→ Install operating system later
+→ Linux
+→ Ubuntu 64-bit (or the appropriate Proxmox-compatible option)
+```
+
+For an actual Proxmox cluster, use the Proxmox VE ISO instead of Ubuntu.
+
+Step 2. Configure each host VM.
+
+Suggested lab resources, if your computer can support them:
+
+- CPU: 2 cores
+- RAM: 8 GB
+- Disk: 50–100 GB
+- Network adapter: Bridged or another correctly configured shared network
+
+Name the VMs `Proxmox1` and `Proxmox2`.
+
+Step 3. Install Proxmox VE on both VMs.
+
+1. Download the Proxmox VE ISO from the official website.
+2. Attach the ISO to each VM's virtual CD/DVD drive.
+3. Boot the VM and follow the installer.
+4. Set a root password and configure the management network.
+5. Record each host's IP address.
+
+Example addresses only:
+
+```
+Proxmox1 → 192.168.1.101
+Proxmox2 → 192.168.1.102
+```
+
+Use IP addresses from your actual network.
+
+Step 4. Verify network connectivity.
+
+Open the Proxmox shell or SSH into each host.
+
+On Proxmox1:
+
+```
+ip addr
+ping 192.168.1.102
+```
+
+On Proxmox2:
+
+```
+ip addr
+ping 192.168.1.101
+```
+
+Replace the example IPs with your actual addresses.
+
+### Task 2: Configure Hypervisor Clustering
+
+Step 5. Open the Proxmox web interface.
+
+On your computer's browser, open:
+
+```
+https://192.168.1.101:8006
+```
+
+Log in as `root` using the password you configured.
+
+Step 6. Create the cluster on Proxmox1.
+
+```
+Select Proxmox1
+→ Datacenter
+→ Cluster
+→ Create Cluster
+```
+
+Enter a cluster name, for example:
+
+```
+cloud-cluster
+```
+
+Select the appropriate cluster network interface and create the cluster.
+
+Step 7. Join Proxmox2 to the cluster.
+
+On Proxmox1:
+
+```
+Datacenter → Cluster → Join Information
+```
+
+Copy the join information.
+
+On Proxmox2, open its web interface and navigate to:
+
+```
+Datacenter → Cluster → Join Cluster
+```
+
+Paste the join information, provide the required credentials, and join.
+
+Step 8. Verify the cluster.
+
+In the Proxmox shell, run on either host:
+
+```
+pvecm status
+pvecm nodes
+```
+
+Confirm that both nodes are listed and that cluster communication is working.
+
+The manual specifies creating the cluster on the first Proxmox host, joining the second, and verifying node connectivity.&#x20;
+
+UIT2702-Cloud-LabManual_Sample.pdf
+
+
+
+## Part 2: Implement High Availability and Load Balancing
+
+### Task 1: Configure High Availability for VMs
+
+Step 9. Create a test VM.
+
+In the Proxmox web interface:
+
+```
+Select a node
+→ Create VM
+→ Enter VM ID and name
+→ Configure OS, disk, CPU, RAM and network
+→ Finish
+```
+
+Make sure the VM is stored on storage accessible to the other host if you want it to restart there without copying its disk.
+
+Step 10. Configure HA.
+
+```
+Datacenter
+→ HA
+→ Add
+→ Select the test VM
+→ Configure HA state
+→ Add
+```
+
+The exact menu labels may differ by Proxmox version.
+
+Step 11. Test HA.
+
+1. Ensure the cluster has quorum and the VM is HA-managed.
+2. Check that the VM is running.
+3. Perform a controlled host-failure test only in a safe lab environment.
+4. Verify that the VM restarts on another available node.
+
+Note: A two-node cluster may require a third voting device (QDevice) to maintain quorum during a node failure. Shared storage and correct HA configuration are also required.
+
+### Task 2: Implement Load Balancing
+
+Step 12. Create test VMs on both nodes.
+
+```
+Proxmox1 → VM101
+Proxmox2 → VM102
+```
+
+Step 13. Monitor resource usage.
+
+On each Proxmox host:
+
+```
+top
+```
+
+You can also inspect CPU and memory usage through the Proxmox web interface.
+
+Step 14. Distribute VM workloads.
+
+Move suitable VMs between nodes to distribute CPU and memory usage.
+
+```
+Select VM
+→ Migrate
+→ Select target node
+→ Migrate
+```
+
+Automatic workload balancing depends on the platform and any additional balancing configuration. Moving VMs manually demonstrates workload distribution but is not automatic load balancing.
+
+The lab manual describes configuring HA policies, monitoring resource usage and distributing workloads across cluster nodes.&#x20;
+
+UIT2702-Cloud-LabManual_Sample.pdf
+
+
+
+## Part 3: Manage and Migrate Virtual Machines
+
+### Task 1: Migrate VMs Across Hypervisors
+
+Step 15. Prepare the VM for migration.
+
+Verify that:
+
+- Both Proxmox nodes are online.
+- Both nodes are members of the same cluster.
+- Networking is configured correctly.
+- The target node has sufficient CPU and memory.
+- The VM disk is on shared storage, or the migration method supports transferring its disk.
+
+Step 16. Perform migration.
+
+In the Proxmox interface:
+
+```
+Select VM
+→ Migrate
+→ Select target node
+→ Choose online/live migration if available
+→ Migrate
+```
+
+If the VM and storage configuration support it, the VM can migrate while running. Otherwise, use an appropriate offline migration method.
+
+Step 17. Verify migration.
+
+```
+pvecm status
+pvecm nodes
+```
+
+Then check the Proxmox interface to confirm that the VM is running on the destination node. Test the VM's application or network connectivity.
+
+If you are restricted to VMware Workstation only: the lab manual suggests powering off a VM, exporting it as an OVF template or copying its virtual disk, importing it on another host, and starting it there. This demonstrates manual migration, not live migration.&#x20;
+
+UIT2702-Cloud-LabManual_Sample.pdf
+
+
+
+## Final command checklist
+
+```
+# Check network interfaces
+ip addr
+
+# Test connectivity
+ping <OTHER_NODE_IP>
+
+# Check cluster status
+pvecm status
+
+# List cluster nodes
+pvecm nodes
+
+# Monitor CPU and memory
+top
+```
+
+Expected result: Two hypervisor hosts are configured as a cluster, cluster membership is verified, HA and workload distribution are configured, and VM migration is tested. Live migration and automatic failover require the appropriate storage, quorum, networking and HA setup.
