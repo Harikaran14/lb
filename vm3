@@ -1,0 +1,281 @@
+# Exercise 7 — Hypervisor Clustering in a Cloud Environment
+
+Follow these steps in order for your lab implementation, based on Exercise 7 in your lab manual. The manual uses VMware Workstation to create VMs that act as hypervisor hosts, with Proxmox VE as an example hypervisor.&#x20;
+
+UIT2702-Cloud-LabManual_Sample.pdf
+
+
+
+Important: VMware Workstation alone does not provide a complete live-migration and high-availability cluster. For actual clustering, use Proxmox VE on the hosts and configure shared storage and cluster networking as required. The manual's VM-copy method is a simulation, not live migration.
+
+## Part 1: Setting Up a Hypervisor Cluster
+
+### Task 1: Set Up Hypervisor Hosts
+
+Step 1. Create two virtual machines in VMware Workstation.
+
+```
+VMware Workstation
+→ File
+→ New Virtual Machine
+→ Typical
+→ Install operating system later
+→ Linux
+→ Ubuntu 64-bit (or the appropriate Proxmox-compatible option)
+```
+
+For an actual Proxmox cluster, use the Proxmox VE ISO instead of Ubuntu.
+
+Step 2. Configure each host VM.
+
+Suggested lab resources, if your computer can support them:
+
+- CPU: 2 cores
+- RAM: 8 GB
+- Disk: 50–100 GB
+- Network adapter: Bridged or another correctly configured shared network
+
+Name the VMs `Proxmox1` and `Proxmox2`.
+
+Step 3. Install Proxmox VE on both VMs.
+
+1. Download the Proxmox VE ISO from the official website.
+2. Attach the ISO to each VM's virtual CD/DVD drive.
+3. Boot the VM and follow the installer.
+4. Set a root password and configure the management network.
+5. Record each host's IP address.
+
+Example addresses only:
+
+```
+Proxmox1 → 192.168.1.101
+Proxmox2 → 192.168.1.102
+```
+
+Use IP addresses from your actual network.
+
+Step 4. Verify network connectivity.
+
+Open the Proxmox shell or SSH into each host.
+
+On Proxmox1:
+
+```
+ip addr
+ping 192.168.1.102
+```
+
+On Proxmox2:
+
+```
+ip addr
+ping 192.168.1.101
+```
+
+Replace the example IPs with your actual addresses.
+
+### Task 2: Configure Hypervisor Clustering
+
+Step 5. Open the Proxmox web interface.
+
+On your computer's browser, open:
+
+```
+https://192.168.1.101:8006
+```
+
+Log in as `root` using the password you configured.
+
+Step 6. Create the cluster on Proxmox1.
+
+```
+Select Proxmox1
+→ Datacenter
+→ Cluster
+→ Create Cluster
+```
+
+Enter a cluster name, for example:
+
+```
+cloud-cluster
+```
+
+Select the appropriate cluster network interface and create the cluster.
+
+Step 7. Join Proxmox2 to the cluster.
+
+On Proxmox1:
+
+```
+Datacenter → Cluster → Join Information
+```
+
+Copy the join information.
+
+On Proxmox2, open its web interface and navigate to:
+
+```
+Datacenter → Cluster → Join Cluster
+```
+
+Paste the join information, provide the required credentials, and join.
+
+Step 8. Verify the cluster.
+
+In the Proxmox shell, run on either host:
+
+```
+pvecm status
+pvecm nodes
+```
+
+Confirm that both nodes are listed and that cluster communication is working.
+
+The manual specifies creating the cluster on the first Proxmox host, joining the second, and verifying node connectivity.&#x20;
+
+UIT2702-Cloud-LabManual_Sample.pdf
+
+
+
+## Part 2: Implement High Availability and Load Balancing
+
+### Task 1: Configure High Availability for VMs
+
+Step 9. Create a test VM.
+
+In the Proxmox web interface:
+
+```
+Select a node
+→ Create VM
+→ Enter VM ID and name
+→ Configure OS, disk, CPU, RAM and network
+→ Finish
+```
+
+Make sure the VM is stored on storage accessible to the other host if you want it to restart there without copying its disk.
+
+Step 10. Configure HA.
+
+```
+Datacenter
+→ HA
+→ Add
+→ Select the test VM
+→ Configure HA state
+→ Add
+```
+
+The exact menu labels may differ by Proxmox version.
+
+Step 11. Test HA.
+
+1. Ensure the cluster has quorum and the VM is HA-managed.
+2. Check that the VM is running.
+3. Perform a controlled host-failure test only in a safe lab environment.
+4. Verify that the VM restarts on another available node.
+
+Note: A two-node cluster may require a third voting device (QDevice) to maintain quorum during a node failure. Shared storage and correct HA configuration are also required.
+
+### Task 2: Implement Load Balancing
+
+Step 12. Create test VMs on both nodes.
+
+```
+Proxmox1 → VM101
+Proxmox2 → VM102
+```
+
+Step 13. Monitor resource usage.
+
+On each Proxmox host:
+
+```
+top
+```
+
+You can also inspect CPU and memory usage through the Proxmox web interface.
+
+Step 14. Distribute VM workloads.
+
+Move suitable VMs between nodes to distribute CPU and memory usage.
+
+```
+Select VM
+→ Migrate
+→ Select target node
+→ Migrate
+```
+
+Automatic workload balancing depends on the platform and any additional balancing configuration. Moving VMs manually demonstrates workload distribution but is not automatic load balancing.
+
+The lab manual describes configuring HA policies, monitoring resource usage and distributing workloads across cluster nodes.&#x20;
+
+UIT2702-Cloud-LabManual_Sample.pdf
+
+
+
+## Part 3: Manage and Migrate Virtual Machines
+
+### Task 1: Migrate VMs Across Hypervisors
+
+Step 15. Prepare the VM for migration.
+
+Verify that:
+
+- Both Proxmox nodes are online.
+- Both nodes are members of the same cluster.
+- Networking is configured correctly.
+- The target node has sufficient CPU and memory.
+- The VM disk is on shared storage, or the migration method supports transferring its disk.
+
+Step 16. Perform migration.
+
+In the Proxmox interface:
+
+```
+Select VM
+→ Migrate
+→ Select target node
+→ Choose online/live migration if available
+→ Migrate
+```
+
+If the VM and storage configuration support it, the VM can migrate while running. Otherwise, use an appropriate offline migration method.
+
+Step 17. Verify migration.
+
+```
+pvecm status
+pvecm nodes
+```
+
+Then check the Proxmox interface to confirm that the VM is running on the destination node. Test the VM's application or network connectivity.
+
+If you are restricted to VMware Workstation only: the lab manual suggests powering off a VM, exporting it as an OVF template or copying its virtual disk, importing it on another host, and starting it there. This demonstrates manual migration, not live migration.&#x20;
+
+UIT2702-Cloud-LabManual_Sample.pdf
+
+
+
+## Final command checklist
+
+```
+# Check network interfaces
+ip addr
+
+# Test connectivity
+ping <OTHER_NODE_IP>
+
+# Check cluster status
+pvecm status
+
+# List cluster nodes
+pvecm nodes
+
+# Monitor CPU and memory
+top
+```
+
+Expected result: Two hypervisor hosts are configured as a cluster, cluster membership is verified, HA and workload distribution are configured, and VM migration is tested. Live migration and automatic failover require the appropriate storage, quorum, networking and HA setup.
