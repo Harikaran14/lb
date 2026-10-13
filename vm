@@ -38,6 +38,7 @@ VM3:
 
 Save using Ctrl+O, Enter, Ctrl+X.
 Step 6. Find each VM's IP address.
+sudo apt install net-tools
 ifconfig
 
 
