@@ -1,0 +1,138 @@
+
+Exercise 6 — Task Scheduling and Load Balancing
+Follow these steps from the beginning.
+Part 1: Task Scheduling Using Cron
+Step 1. Open VMware Workstation and power on an Ubuntu VM.
+Step 2. Open the Ubuntu Terminal and create a script.
+nano script.sh
+
+
+Enter:
+#!/bin/bash
+echo "Hello Selcia"
+
+
+Save using Ctrl+O, Enter, Ctrl+X.
+Step 3. Make the script executable.
+chmod +x script.sh
+
+
+Step 4. Find the full path of your current directory.
+pwd
+
+
+For example, if it prints /home/student, the script path is /home/student/script.sh.
+Step 5. Open the cron table.
+crontab -e
+
+
+If prompted, select your preferred editor.
+Step 6. Add the following line, replacing /home/student with your actual directory.
+*/1 * * * * /home/student/script.sh >> /home/student/output.log 2>&1
+
+
+Save and exit the editor.
+Step 7. Wait one or two minutes, then check the output.
+cat /home/student/output.log
+
+
+Expected output:
+Hello Selcia
+Hello Selcia
+
+
+Step 8. Check the cron logs.
+tail -f /var/log/syslog | grep CRON
+
+
+Press Ctrl+C to stop monitoring.
+
+Part 2: Load Balancing Using HAProxy
+Step 9. Ensure Apache is running on VM1, VM2 and VM3.
+If not installed, run on each web server:
+sudo apt update
+sudo apt install apache2 -y
+sudo systemctl enable --now apache2
+
+
+Step 10. Install HAProxy on the Load Balancer VM.
+sudo apt update
+sudo apt install haproxy -y
+
+
+Step 11. Open the HAProxy configuration file.
+sudo nano /etc/haproxy/haproxy.cfg
+
+
+Add:
+frontend http_front
+    bind *:80
+    default_backend http_back
+
+backend http_back
+    balance roundrobin
+    server vm1 <VM1_IP>:80 check
+    server vm2 <VM2_IP>:80 check
+    server vm3 <VM3_IP>:80 check
+
+
+Replace the placeholders with the actual web-server IP addresses.
+Step 12. Restart and enable HAProxy.
+sudo systemctl restart haproxy
+sudo systemctl enable haproxy
+sudo systemctl status haproxy
+
+
+Step 13. Test in your browser.
+http://<LOAD_BALANCER_IP>
+
+
+Refresh the page and check the response.
+
+Part 3: Advanced Scheduling (Optional)
+Step 14. Create the first script.
+nano script1.sh
+
+
+Enter:
+#!/bin/bash
+echo "Running CPU-intensive task in script 1"
+
+
+Save and exit.
+Step 15. Create the second script.
+nano script2.sh
+
+
+Enter:
+#!/bin/bash
+echo "Logging system information in script 2"
+date >> /home/student/system.log
+
+
+Replace /home/student with your actual home directory.
+Step 16. Make both scripts executable.
+chmod +x script1.sh script2.sh
+
+
+Step 17. Open cron.
+crontab -e
+
+
+Add these lines, replacing the example paths with your actual paths:
+*/1 * * * * nice -n 10 /home/student/script1.sh >> /home/student/output-pr.log 2>&1
+*/1 * * * * nice -n 5 /home/student/script2.sh >> /home/student/output-pr.log 2>&1
+
+
+Step 18. Check the output.
+cat /home/student/output-pr.log
+
+
+Check the system log created by script2:
+cat /home/student/system.log
+
+
+Result: Cron-based task scheduling, HAProxy load balancing and optional priority-based scheduling are configured
+
+
+
