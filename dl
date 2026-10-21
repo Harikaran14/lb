@@ -1,0 +1,883 @@
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+from tensorflow.keras.applications import VGG16
+from tensorflow.keras.applications.vgg16 import preprocess_input, decode_predictions
+from tensorflow.keras.utils import load_img, img_to_array
+
+# 1. Load pre-trained VGG16
+model = VGG16(weights="imagenet")
+
+# 2. Load a single local image
+image_path = "cat.jpg"  # Replace with your image path
+
+img = load_img(image_path, target_size=(224, 224))
+image = img_to_array(img)
+
+# 3. Display the image
+plt.imshow(image.astype("uint8"))
+plt.axis("off")
+plt.show()
+
+# 4. Preprocess the image
+image = np.expand_dims(image, axis=0)
+image = preprocess_input(image)
+
+# 5. Predict the ImageNet class
+prediction = model.predict(image, verbose=0)
+
+# 6. Display Top-5 predictions
+top5 = decode_predictions(prediction, top=5)[0]
+
+print("Top-5 predictions:")
+for _, class_name, probability in top5:
+    print(class_name, ":", round(probability * 100, 2), "%")
+How to use it:
+- Place cat.jpg in the same folder as your Python script or notebook.
+- Alternatively, change image_path to the full path, such as r"C:\Users\YourName\Pictures\cat.jpg".
+- The first run requires internet to download VGG16 weights unless they are already cached. Subsequent runs can work offline.
+
+  
+import tensorflow as tf
+import numpy as np
+import matplotlib.pyplot as plt
+
+from tensorflow.keras.applications import VGG16
+from tensorflow.keras.applications.vgg16 import preprocess_input
+from tensorflow.keras.utils import load_img, img_to_array
+
+# 1. Load pre-trained VGG16
+model = VGG16(weights="imagenet")
+
+# 2. Load a local ImageNet image
+image_path = "cat.jpg"  # Change to your image path
+
+img = load_img(image_path, target_size=(224, 224))
+image = img_to_array(img)
+
+# Display input image
+plt.figure(figsize=(4, 4))
+plt.imshow(image.astype("uint8"))
+plt.title("Input Image")
+plt.axis("off")
+plt.show()
+
+# 3. Preprocess image
+x = np.expand_dims(image.copy(), axis=0)
+x = preprocess_input(x)
+
+# 4. Select layers from different depths
+layer_names = [
+    "block1_conv1",  # Shallow layer
+    "block2_conv2",  # Intermediate layer
+    "block5_conv3"   # Deep layer
+]
+
+# 5. Create a model to extract feature maps
+outputs = [model.get_layer(name).output for name in layer_names]
+
+feature_model = tf.keras.Model(
+    inputs=model.input,
+    outputs=outputs
+)
+
+# 6. Extract feature maps
+feature_maps = feature_model.predict(x, verbose=0)
+
+# 7. Visualize feature maps and print dimensions
+for layer_name, features in zip(layer_names, feature_maps):
+
+    print("\nLayer:", layer_name)
+    print("Feature map dimensions:", features.shape)
+
+    # Display first 8 feature maps
+    plt.figure(figsize=(12, 4))
+    plt.suptitle("Feature Maps - " + layer_name)
+
+    for i in range(8):
+        plt.subplot(2, 4, i + 1)
+        plt.imshow(features[0, :, :, i], cmap="gray")
+        plt.axis("off")
+        plt.title("Map " + str(i + 1))
+
+    plt.tight_layout()
+    plt.show()
+
+# 8. Visualize learned filters from the first convolutional layer
+layer = model.get_layer("block1_conv1")
+filters, biases = layer.get_weights()
+
+print("\nFilter layer:", layer.name)
+print("Filter dimensions:", filters.shape)
+
+# Normalize filters for visualization
+filters_min = filters.min()
+filters_max = filters.max()
+filters = (filters - filters_min) / (filters_max - filters_min + 1e-8)
+
+plt.figure(figsize=(10, 5))
+plt.suptitle("Learned Filters - block1_conv1")
+
+for i in range(8):
+    plt.subplot(2, 4, i + 1)
+    plt.imshow(filters[:, :, :, i])
+    plt.axis("off")
+    plt.title("Filter " + str(i + 1))
+
+plt.tight_layout()
+plt.show()
+Expected output
+The selected layers have the following dimensions for a 224 × 224 input image:
+Layer	Feature-map dimensions	Interpretation
+block1_conv1	224 × 224 × 64	Basic edges, colors and simple patterns
+block2_conv2	112 × 112 × 128	Textures and combinations of edges
+block5_conv3	14 × 14 × 512	Complex patterns and object-part features
+The batch dimension is included in the printed shape, so the full shapes will be (1, 224, 224, 64), (1, 112, 112, 128), and (1, 14, 14, 512).
+Interpretation for your lab record
+1. Early layer: Feature maps retain high spatial resolution and respond to basic edges, orientations and color contrasts.
+2. Intermediate layer: Feature maps capture more complex textures and combinations of local patterns. Spatial resolution decreases.
+3. Deep layer: Feature maps contain more channels but smaller spatial dimensions. They represent increasingly complex patterns associated with object parts and semantic structures.
+4. Convolutional filters: The first layer's learned filters often resemble edge detectors, color-sensitive filters and simple oriented patterns.
+Note: Feature maps are activation outputs for your chosen image, whereas filters are the learned weights of the convolutional layer. This code visualizes both. The exact activations depend on the input image.
+
+
+  
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+import tensorflow as tf
+
+from tensorflow.keras.applications import VGG16
+from tensorflow.keras.applications.vgg16 import preprocess_input
+from tensorflow.keras.utils import load_img, img_to_array
+from tensorflow.keras.layers import GlobalAveragePooling2D
+from tensorflow.keras.models import Model
+from tensorflow.keras import Sequential
+from tensorflow.keras.layers import Dense, Dropout
+
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import confusion_matrix, classification_report, ConfusionMatrixDisplay
+
+# 1. Load ImageNet images from local folders
+path = "dataset"
+IMG_SIZE = (224, 224)
+
+images = []
+labels = []
+
+for class_name in sorted(os.listdir(path)):
+    class_path = os.path.join(path, class_name)
+
+    if os.path.isdir(class_path):
+        for file in os.listdir(class_path):
+            if file.lower().endswith((".jpg", ".jpeg", ".png")):
+                img = load_img(
+                    os.path.join(class_path, file),
+                    target_size=IMG_SIZE
+                )
+                images.append(img_to_array(img))
+                labels.append(class_name)
+
+if len(images) == 0:
+    raise ValueError("No images found. Check the dataset folder.")
+
+images = np.array(images, dtype=np.float32)
+labels = np.array(labels)
+
+# Convert class names to numbers
+class_names = sorted(np.unique(labels))
+class_to_number = {name: i for i, name in enumerate(class_names)}
+y = np.array([class_to_number[label] for label in labels])
+
+print("Number of images:", len(images))
+print("Classes:", class_names)
+
+# Check that each class has enough images
+if min(np.bincount(y)) < 2:
+    raise ValueError("Each class needs at least 2 images.")
+
+# 2. Split into training and testing images
+X_train, X_test, y_train, y_test = train_test_split(
+    images, y,
+    test_size=0.2,
+    random_state=42,
+    stratify=y
+)
+
+# 3. Load VGG16 without its original classification layers
+base_model = VGG16(
+    weights="imagenet",
+    include_top=False,
+    input_shape=(224, 224, 3)
+)
+
+# 4. Extract high-level features using Global Average Pooling
+feature_model = Sequential([
+    base_model,
+    GlobalAveragePooling2D()
+])
+
+# Freeze the pre-trained CNN
+base_model.trainable = False
+
+# Preprocess images for VGG16
+X_train = preprocess_input(X_train.copy())
+X_test = preprocess_input(X_test.copy())
+
+# Extract feature vectors
+train_features = feature_model.predict(
+    X_train, batch_size=16, verbose=1
+)
+
+test_features = feature_model.predict(
+    X_test, batch_size=16, verbose=1
+)
+
+print("\nTraining feature shape:", train_features.shape)
+print("Testing feature shape:", test_features.shape)
+print("Feature vector dimension:", train_features.shape[1])
+
+# 5. Save extracted feature vectors
+np.save("train_features.npy", train_features)
+np.save("test_features.npy", test_features)
+np.save("train_labels.npy", y_train)
+np.save("test_labels.npy", y_test)
+
+# 6. Build a new classification layer
+num_classes = len(class_names)
+
+classifier = Sequential([
+    tf.keras.Input(shape=(train_features.shape[1],)),
+    Dense(128, activation="relu"),
+    Dropout(0.3),
+    Dense(num_classes, activation="softmax")
+])
+
+classifier.compile(
+    optimizer="adam",
+    loss="sparse_categorical_crossentropy",
+    metrics=["accuracy"]
+)
+
+# 7. Train the classifier on extracted features
+history = classifier.fit(
+    train_features, y_train,
+    epochs=15,
+    batch_size=16,
+    validation_split=0.2,
+    verbose=1
+)
+
+# 8. Test on unseen images
+predictions = classifier.predict(test_features, verbose=0)
+y_pred = np.argmax(predictions, axis=1)
+
+# 9. Calculate evaluation metrics
+print("\nClassification Report:")
+print(classification_report(
+    y_test,
+    y_pred,
+    labels=np.arange(num_classes),
+    target_names=class_names,
+    zero_division=0
+))
+
+# 10. Display confusion matrix
+cm = confusion_matrix(
+    y_test, y_pred,
+    labels=np.arange(num_classes)
+)
+
+display = ConfusionMatrixDisplay(
+    confusion_matrix=cm,
+    display_labels=class_names
+)
+
+fig, ax = plt.subplots(figsize=(8, 6))
+display.plot(ax=ax, cmap="Blues", xticks_rotation=45)
+plt.title("Transfer Learning Confusion Matrix")
+plt.tight_layout()
+plt.show()
+
+# 11. Plot classifier accuracy
+plt.plot(history.history["accuracy"], label="Training Accuracy")
+plt.plot(history.history["val_accuracy"], label="Validation Accuracy")
+plt.xlabel("Epoch")
+plt.ylabel("Accuracy")
+plt.title("Classifier Accuracy")
+plt.legend()
+plt.show()
+
+# 12. Predict the class of one test image
+i = 0
+predicted_class = class_names[y_pred[i]]
+actual_class = class_names[y_test[i]]
+
+plt.imshow(
+    X_test[i].copy()[..., ::-1] if False else images[
+        np.where(y == y_test[i])[0][0]
+    ].astype("uint8")
+)
+plt.title("Actual: " + actual_class + "\nPredicted: " + predicted_class)
+plt.axis("off")
+plt.show()
+Dataset folder structure
+Use the same local dataset arrangement as in Experiments 1 and 2.
+project/
+
+dataset/
+
+cats/
+
+dogs/
+
+birds/
+
+
+
+
+Each class folder must contain its corresponding images. Use several images per class; ideally, use at least 10–20 or more per class for a meaningful experiment.
+Expected output
+Requirement	Expected result
+Pre-trained CNN	VGG16
+Feature extraction	Convolutional layers without original classifier
+Global Average Pooling	Converts feature maps into a feature vector
+Feature-vector dimension	512
+New classifier	Dense layers with softmax output
+Evaluation	Accuracy, precision, recall and F1-score
+Confusion matrix	Actual vs predicted categories
+The feature-vector dimension is 512 because VGG16 produces 512 channels in its final convolutional block, and Global Average Pooling averages each channel spatially.
+
+Important notes:
+- Install scikit-learn if needed: pip install scikit-learn.
+- The local dataset can be loaded offline. Pre-trained VGG16 weights must already be cached or downloaded once.
+- The training and test sets are split before feature extraction, preventing the same image from appearing in both.
+- The final classifier is trained on extracted features; the VGG16 backbone remains frozen.
+- Accuracy and the other metrics depend on your dataset size, image quality, and selected classes. They cannot be known in advance.
+
+
+
+  
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+import tensorflow as tf
+
+from tensorflow.keras.applications import VGG16
+from tensorflow.keras.applications.vgg16 import preprocess_input
+from tensorflow.keras.utils import load_img, img_to_array
+from tensorflow.keras.layers import Input, Embedding, LSTM, Dense, Dropout
+from tensorflow.keras.models import Model
+from tensorflow.keras.preprocessing.text import Tokenizer
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+
+# 1. Load local ImageNet images
+path = "dataset"
+IMG_SIZE = (224, 224)
+MAX_IMAGES_PER_CLASS = 50
+
+images = []
+captions = []
+
+for class_name in sorted(os.listdir(path)):
+    class_path = os.path.join(path, class_name)
+
+    if os.path.isdir(class_path):
+        count = 0
+
+        for file in sorted(os.listdir(class_path)):
+            if file.lower().endswith((".jpg", ".jpeg", ".png")):
+
+                img = load_img(
+                    os.path.join(class_path, file),
+                    target_size=IMG_SIZE
+                )
+
+                images.append(img_to_array(img))
+
+                # Convert folder name into a caption
+                label = class_name.replace("_", " ").replace("-", " ")
+                caption = "startseq a photo of " + label.lower() + " endseq"
+                captions.append(caption)
+
+                count += 1
+                if count >= MAX_IMAGES_PER_CLASS:
+                    break
+
+if len(images) == 0:
+    raise ValueError("No images found. Check the dataset folder.")
+
+images = np.array(images, dtype=np.float32)
+print("Number of images:", len(images))
+
+# 2. Load pre-trained VGG16 as CNN encoder
+cnn = VGG16(
+    weights="imagenet",
+    include_top=False,
+    pooling="avg",
+    input_shape=(224, 224, 3)
+)
+
+cnn.trainable = False
+
+# 3. Extract image feature vectors
+x = preprocess_input(images.copy())
+features = cnn.predict(x, batch_size=16, verbose=1)
+
+print("Image feature shape:", features.shape)
+
+# 4. Tokenize captions and build vocabulary
+tokenizer = Tokenizer(
+    filters="",
+    lower=True,
+    oov_token="<unk>"
+)
+
+tokenizer.fit_on_texts(captions)
+
+sequences = tokenizer.texts_to_sequences(captions)
+vocab_size = len(tokenizer.word_index) + 1
+max_length = max(len(seq) for seq in sequences)
+
+print("Vocabulary size:", vocab_size)
+print("Maximum caption length:", max_length)
+
+# 5. Prepare next-word training sequences
+image_inputs = []
+text_inputs = []
+next_words = []
+
+for i, seq in enumerate(sequences):
+    for j in range(1, len(seq)):
+        image_inputs.append(features[i])
+        text_inputs.append(seq[:j])
+        next_words.append(seq[j])
+
+text_inputs = pad_sequences(
+    text_inputs,
+    maxlen=max_length - 1,
+    padding="post"
+)
+
+image_inputs = np.array(image_inputs, dtype=np.float32)
+text_inputs = np.array(text_inputs, dtype=np.int32)
+next_words = np.array(next_words, dtype=np.int32)
+
+print("Training samples:", len(next_words))
+
+# 6. Build CNN-LSTM caption decoder
+image_input = Input(shape=(features.shape[1],), name="image_features")
+text_input = Input(shape=(max_length - 1,), name="text_sequence")
+
+image_embedding = Dense(128, activation="relu")(image_input)
+image_embedding = Dropout(0.2)(image_embedding)
+image_embedding = tf.keras.layers.RepeatVector(1)(image_embedding)
+
+word_embedding = Embedding(
+    input_dim=vocab_size,
+    output_dim=128,
+    mask_zero=True
+)(text_input)
+
+# Combine image representation and word sequence
+combined = tf.keras.layers.Concatenate(axis=1)(
+    [image_embedding, word_embedding]
+)
+
+lstm_output = LSTM(256)(combined)
+output = Dense(vocab_size, activation="softmax")(lstm_output)
+
+model = Model(
+    inputs=[image_input, text_input],
+    outputs=output
+)
+
+model.compile(
+    optimizer="adam",
+    loss="sparse_categorical_crossentropy",
+    metrics=["accuracy"]
+)
+
+model.summary()
+
+# 7. Train the caption generation model
+model.fit(
+    [image_inputs, text_inputs],
+    next_words,
+    epochs=20,
+    batch_size=32,
+    validation_split=0.1
+)
+
+# 8. Generate a caption for an image
+def generate_caption(feature):
+    caption = "startseq"
+
+    for _ in range(max_length):
+        sequence = tokenizer.texts_to_sequences([caption])[0]
+
+        sequence = pad_sequences(
+            [sequence],
+            maxlen=max_length - 1,
+            padding="post",
+            truncating="post"
+        )
+
+        prediction = model.predict(
+            [feature.reshape(1, -1), sequence],
+            verbose=0
+        )
+
+        word_index = np.argmax(prediction[0])
+        word = tokenizer.index_word.get(word_index, "")
+
+        if word == "endseq" or word == "":
+            break
+
+        caption += " " + word
+
+    return caption.replace("startseq", "").strip()
+
+# 9. Test on a previously unseen image
+# Use a separate test image from your dataset.
+test_image_path = "test.jpg"  # Replace with your image path
+
+test_img = load_img(test_image_path, target_size=IMG_SIZE)
+test_array = img_to_array(test_img)
+
+test_x = preprocess_input(np.expand_dims(test_array.copy(), axis=0))
+test_feature = cnn.predict(test_x, verbose=0)[0]
+
+generated_caption = generate_caption(test_feature)
+
+# 10. Display image and generated caption
+plt.figure(figsize=(6, 5))
+plt.imshow(test_img)
+plt.title("Generated Caption:\n" + generated_caption)
+plt.axis("off")
+plt.show()
+
+print("Generated caption:", generated_caption)
+Dataset structure
+project/
+
+dataset/
+
+golden_retriever/
+
+tabby_cat/
+
+school_bus/
+
+
+test.jpg
+
+
+
+The test.jpg file should be separate from the training images for a genuine unseen-image test.
+
+
+
+import tensorflow as tf
+import numpy as np
+import matplotlib.pyplot as plt
+import os
+
+from tensorflow.keras import layers, Model
+
+# 1. Load local ImageNet images
+path = "dataset"
+IMG_SIZE = 64
+BATCH_SIZE = 32
+NOISE_DIM = 100
+EPOCHS = 50
+
+dataset = tf.keras.utils.image_dataset_from_directory(
+    path,
+    image_size=(IMG_SIZE, IMG_SIZE),
+    batch_size=BATCH_SIZE,
+    label_mode="int",
+    shuffle=True
+)
+
+class_names = dataset.class_names
+num_classes = len(class_names)
+
+print("Classes:", class_names)
+
+# Normalize images to [-1, 1]
+dataset = dataset.map(
+    lambda images, labels: (
+        tf.cast(images, tf.float32) / 127.5 - 1.0,
+        labels
+    )
+).prefetch(tf.data.AUTOTUNE)
+
+# 2. Create text descriptions from class labels
+captions = [
+    "a photo of " + name.replace("_", " ").replace("-", " ")
+    for name in class_names
+]
+
+print("\nText descriptions:")
+for caption in captions:
+    print(caption)
+
+# 3. Convert text into numerical representations
+text_encoder = layers.TextVectorization(
+    output_mode="multi_hot"
+)
+
+text_encoder.adapt(captions)
+
+vocab_size = len(text_encoder.get_vocabulary())
+
+print("\nVocabulary size:", vocab_size)
+
+caption_tensor = tf.constant(captions)
+
+# 4. Build the Generator
+noise_input = layers.Input(shape=(NOISE_DIM,))
+text_input = layers.Input(shape=(vocab_size,))
+
+combined = layers.Concatenate()([noise_input, text_input])
+
+x = layers.Dense(8 * 8 * 256, activation="relu")(combined)
+x = layers.Reshape((8, 8, 256))(x)
+
+x = layers.BatchNormalization()(x)
+x = layers.Conv2DTranspose(
+    128, 4, strides=2, padding="same", activation="relu"
+)(x)
+
+x = layers.BatchNormalization()(x)
+x = layers.Conv2DTranspose(
+    64, 4, strides=2, padding="same", activation="relu"
+)(x)
+
+x = layers.Conv2DTranspose(
+    32, 4, strides=2, padding="same", activation="relu"
+)(x)
+
+generated_image = layers.Conv2D(
+    3, 3, padding="same", activation="tanh"
+)(x)
+
+generator = Model(
+    [noise_input, text_input],
+    generated_image,
+    name="Generator"
+)
+
+generator.summary()
+
+# 5. Build the Discriminator
+image_input = layers.Input(shape=(IMG_SIZE, IMG_SIZE, 3))
+text_input_d = layers.Input(shape=(vocab_size,))
+
+text_map = layers.Reshape((1, 1, vocab_size))(text_input_d)
+text_map = layers.UpSampling2D(
+    size=(IMG_SIZE, IMG_SIZE)
+)(text_map)
+
+combined_image = layers.Concatenate()([image_input, text_map])
+
+x = layers.Conv2D(
+    64, 4, strides=2, padding="same"
+)(combined_image)
+x = layers.LeakyReLU(negative_slope=0.2)(x)
+
+x = layers.Conv2D(
+    128, 4, strides=2, padding="same"
+)(x)
+x = layers.LeakyReLU(negative_slope=0.2)(x)
+
+x = layers.Conv2D(
+    256, 4, strides=2, padding="same"
+)(x)
+x = layers.LeakyReLU(negative_slope=0.2)(x)
+
+x = layers.Flatten()(x)
+validity = layers.Dense(1, activation="sigmoid")(x)
+
+discriminator = Model(
+    [image_input, text_input_d],
+    validity,
+    name="Discriminator"
+)
+
+discriminator.summary()
+
+# 6. Define losses and optimizers
+loss_function = tf.keras.losses.BinaryCrossentropy()
+
+g_optimizer = tf.keras.optimizers.Adam(
+    learning_rate=0.0002, beta_1=0.5
+)
+
+d_optimizer = tf.keras.optimizers.Adam(
+    learning_rate=0.0002, beta_1=0.5
+)
+
+# 7. Train Generator and Discriminator
+for epoch in range(EPOCHS):
+
+    g_losses = []
+    d_losses = []
+
+    for real_images, labels in dataset:
+
+        # Get text description for each real image
+        batch_captions = tf.gather(caption_tensor, labels)
+        text_vectors = text_encoder(batch_captions)
+
+        batch_size = tf.shape(real_images)[0]
+
+        # Generate random noise
+        noise = tf.random.normal((batch_size, NOISE_DIM))
+
+        # Train Discriminator
+        with tf.GradientTape() as d_tape:
+
+            fake_images = generator(
+                [noise, text_vectors], training=True
+            )
+
+            real_output = discriminator(
+                [real_images, text_vectors], training=True
+            )
+
+            fake_output = discriminator(
+                [tf.stop_gradient(fake_images), text_vectors],
+                training=True
+            )
+
+            real_loss = loss_function(
+                tf.ones_like(real_output) * 0.9,
+                real_output
+            )
+
+            fake_loss = loss_function(
+                tf.zeros_like(fake_output),
+                fake_output
+            )
+
+            d_loss = real_loss + fake_loss
+
+        d_gradients = d_tape.gradient(
+            d_loss, discriminator.trainable_variables
+        )
+
+        d_optimizer.apply_gradients(
+            zip(d_gradients, discriminator.trainable_variables)
+        )
+
+        # Train Generator
+        noise = tf.random.normal((batch_size, NOISE_DIM))
+
+        with tf.GradientTape() as g_tape:
+
+            fake_images = generator(
+                [noise, text_vectors], training=True
+            )
+
+            fake_output = discriminator(
+                [fake_images, text_vectors], training=False
+            )
+
+            g_loss = loss_function(
+                tf.ones_like(fake_output),
+                fake_output
+            )
+
+        g_gradients = g_tape.gradient(
+            g_loss, generator.trainable_variables
+        )
+
+        g_optimizer.apply_gradients(
+            zip(g_gradients, generator.trainable_variables)
+        )
+
+        g_losses.append(float(g_loss))
+        d_losses.append(float(d_loss))
+
+    print(
+        f"Epoch {epoch + 1}/{EPOCHS} | "
+        f"Generator Loss: {np.mean(g_losses):.4f} | "
+        f"Discriminator Loss: {np.mean(d_losses):.4f}"
+    )
+
+# 8. Generate an image from a text description
+prompt = "a photo of " + class_names[0].replace("_", " ").replace("-", " ")
+
+text_vector = text_encoder(tf.constant([prompt]))
+noise = tf.random.normal((1, NOISE_DIM))
+
+generated = generator(
+    [noise, text_vector], training=False
+)[0]
+
+generated = (generated.numpy() + 1) / 2
+generated = np.clip(generated, 0, 1)
+
+# 9. Display generated image
+plt.figure(figsize=(5, 5))
+plt.imshow(generated)
+plt.title("Text: " + prompt)
+plt.axis("off")
+plt.show()
+
+print("Generated image for:", prompt)
+
+# 10. Compare with a real image from the same class
+real_example = None
+class_index = 0
+
+for real_batch, label_batch in dataset:
+    matches = tf.where(label_batch == class_index)
+
+    if tf.shape(matches)[0].numpy() > 0:
+        real_example = real_batch[int(matches[0, 0].numpy())]
+        break
+
+if real_example is not None:
+
+    plt.figure(figsize=(9, 4))
+
+    plt.subplot(1, 2, 1)
+    plt.imshow(
+        np.clip((real_example.numpy() + 1) / 2, 0, 1)
+    )
+    plt.title("Real Image: " + class_names[class_index])
+    plt.axis("off")
+
+    plt.subplot(1, 2, 2)
+    plt.imshow(generated)
+    plt.title("Generated Image")
+    plt.axis("off")
+
+    plt.tight_layout()
+    plt.show()
+
+# 11. Save the trained Generator
+generator.save("text_conditioned_generator.keras")
+print("Generator saved successfully.")
+
+
+  Dataset structure
+Use the same local dataset folder as in your previous experiments.
+project/
+
+dataset/
+
+tiger/
+
+golden_retriever/
+
+tabby_cat/
+
+
+
+
+Each class folder must contain its corresponding images. The folder names become the textual descriptions.
