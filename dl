@@ -881,3 +881,13 @@ tabby_cat/
 
 
 Each class folder must contain its corresponding images. The folder names become the textual descriptions.
+
+# Example mapping
+id_to_name = {
+    "n01440764": "tench",
+    "n01443537": "goldfish"
+}
+
+# Convert folder ID to readable label
+class_name = id_to_name.get(folder_name, folder_name)
+caption = "a photo of " + class_name.replace("_", " ")
