@@ -1,0 +1,475 @@
+# ==========================================================
+# EXPERIMENT 1 : ImageNet Preprocessing and Visualization
+# ==========================================================
+
+from tensorflow.keras.preprocessing import image
+from tensorflow.keras.applications import VGG16
+from tensorflow.keras.applications.vgg16 import preprocess_input, decode_predictions
+import numpy as np
+import matplotlib.pyplot as plt
+import os
+
+path = "imagenet/images"
+images = []
+labels = []
+
+# load a subset: 10 classes
+for c in sorted(os.listdir(path))[:10]:
+    folder = os.path.join(path, c)
+
+    if os.path.isdir(folder):
+        for f in os.listdir(folder):
+            if f.lower().endswith((".jpg", ".jpeg", ".png")):
+                images.append(os.path.join(folder, f))
+                labels.append(c)
+
+# split into train (80%) and test (20%)
+idx = np.random.permutation(len(images))
+cut = int(0.8 * len(images))
+train_idx, test_idx = idx[:cut], idx[cut:]
+print("Train:", len(train_idx), "Test:", len(test_idx))
+
+# display random images with their class labels
+plt.figure(figsize=(15, 3))
+for k, j in enumerate(np.random.choice(len(images), 5, replace=False)):
+    plt.subplot(1, 5, k + 1)
+    plt.imshow(image.load_img(images[j]))
+    plt.title(labels[j])
+    plt.axis("off")
+plt.show()
+
+# pick one random test image
+i = np.random.choice(test_idx)
+img_path = images[i]
+
+img = image.load_img(img_path)
+arr = image.img_to_array(img)
+
+print("Original label:", labels[i])
+print("Original shape:", arr.shape)
+print("Original pixel values:")
+print(arr[:5, :5, :])
+
+# resize to 224x224
+img = image.load_img(img_path, target_size=(224, 224))
+x = image.img_to_array(img)
+print("Resized shape:", x.shape)
+
+# add batch dimension
+x = np.expand_dims(x, axis=0)
+
+# normalize as required by VGG16
+x = preprocess_input(x)
+
+print("Preprocessed shape:", x.shape)
+print("Preprocessed pixel values:")
+print(x[0, :5, :5, :])
+
+# load pre-trained model and predict
+model = VGG16(weights="imagenet")
+
+pred = model.predict(x)
+print("Output shape:", pred.shape)
+results = decode_predictions(pred, top=5)
+
+print("Top 5 predictions:")
+for r in results[0]:
+    print(r[1], round(r[2] * 100, 2), "%")
+
+# compare original and predicted label
+print("Original label:", labels[i])
+print("Predicted label:", results[0][0][1])
+
+
+# ==========================================================
+# EXPERIMENT 2 : Visualization of Filters and Feature Maps
+# ==========================================================
+
+from tensorflow.keras.preprocessing import image
+from tensorflow.keras.applications import VGG16
+from tensorflow.keras.applications.vgg16 import preprocess_input
+from tensorflow.keras.models import Model
+import numpy as np
+import matplotlib.pyplot as plt
+import os
+
+path = "imagenet/images"
+images = []
+labels = []
+
+for c in sorted(os.listdir(path))[:10]:
+    folder = os.path.join(path, c)
+    if os.path.isdir(folder):
+        for f in os.listdir(folder):
+            if f.lower().endswith((".jpg", ".jpeg", ".png")):
+                images.append(os.path.join(folder, f))
+                labels.append(c)
+
+# select one image
+i = np.random.randint(len(images))
+img = image.load_img(images[i], target_size=(224, 224))
+x = preprocess_input(np.expand_dims(image.img_to_array(img), axis=0))
+
+plt.imshow(img)
+plt.title("Input Image: " + labels[i])
+plt.show()
+
+model = VGG16(weights="imagenet")
+
+# early, intermediate and deep conv layers
+layer_names = ["block1_conv1", "block3_conv3", "block5_conv3"]
+
+# extract feature maps of the selected layers
+extractor = Model(inputs=model.input,
+                  outputs=[model.get_layer(n).output for n in layer_names])
+maps = extractor.predict(x)
+
+# show 16 images in a 4x4 grid
+def show_grid(items, title, cmap=None):
+    plt.figure(figsize=(8, 8))
+    for k in range(16):
+        plt.subplot(4, 4, k + 1)
+        plt.imshow(items[k], cmap=cmap)
+        plt.axis("off")
+    plt.suptitle(title)
+    plt.show()
+
+for name, fmap in zip(layer_names, maps):
+    w = model.get_layer(name).get_weights()[0]   # filters
+    print("Layer:", name)
+    print("Filter shape:", w.shape)
+    print("Feature map shape:", fmap.shape)
+
+    # filter visualization
+    w = (w - w.min()) / (w.max() - w.min())
+    if w.shape[2] == 3:
+        show_grid([w[:, :, :, k] for k in range(16)], name + " - Filters")
+    else:
+        show_grid([w[:, :, 0, k] for k in range(16)], name + " - Filters", cmap="gray")
+
+    # feature map visualization
+    show_grid([fmap[0, :, :, k] for k in range(16)], name + " - Feature Maps", cmap="viridis")
+
+
+# ==========================================================
+# EXPERIMENT 3 : Feature Extraction and Classification
+# ==========================================================
+
+from tensorflow.keras.preprocessing import image
+from tensorflow.keras.applications import VGG16
+from tensorflow.keras.applications.vgg16 import preprocess_input
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Input
+import numpy as np
+import os
+
+path = "imagenet/images"
+classes = sorted([c for c in os.listdir(path) if os.path.isdir(os.path.join(path, c))])[:10]
+n_classes = len(classes)
+
+paths = []
+labels = []
+for k, c in enumerate(classes):
+    folder = os.path.join(path, c)
+    files = [f for f in os.listdir(folder) if f.lower().endswith((".jpg", ".jpeg", ".png"))]
+    for f in files[:100]:
+        paths.append(os.path.join(folder, f))
+        labels.append(k)
+labels = np.array(labels)
+
+# pre-trained CNN without classification layer, with Global Average Pooling
+base = VGG16(weights="imagenet", include_top=False, pooling="avg")
+
+# extract feature vectors
+features = []
+for s in range(0, len(paths), 32):
+    batch = np.array([image.img_to_array(image.load_img(p, target_size=(224, 224)))
+                      for p in paths[s:s + 32]])
+    features.append(base.predict(preprocess_input(batch), verbose=0))
+features = np.concatenate(features)
+
+print("Feature-vector dimension:", features.shape[1])
+
+# store the feature vectors
+np.save("features.npy", features)
+np.save("labels.npy", labels)
+
+# train / test split
+idx = np.random.permutation(len(features))
+cut = int(0.8 * len(features))
+X_train, y_train = features[idx[:cut]], labels[idx[:cut]]
+X_test, y_test = features[idx[cut:]], labels[idx[cut:]]
+
+# new classification layer, trained on the extracted features
+clf = Sequential([
+    Input(shape=(512,)),
+    Dense(n_classes, activation="softmax")
+])
+clf.compile(optimizer="adam", loss="sparse_categorical_crossentropy", metrics=["accuracy"])
+clf.fit(X_train, y_train, epochs=30, batch_size=16, verbose=2)
+
+# test on unseen images
+y_pred = np.argmax(clf.predict(X_test, verbose=0), axis=1)
+
+# confusion matrix
+cm = np.zeros((n_classes, n_classes), dtype=int)
+for t, p in zip(y_test, y_pred):
+    cm[t][p] += 1
+
+# accuracy, precision, recall, F1
+tp = np.diag(cm)
+precision = tp / np.maximum(cm.sum(axis=0), 1)
+recall = tp / np.maximum(cm.sum(axis=1), 1)
+f1 = 2 * precision * recall / np.maximum(precision + recall, 1e-9)
+
+print("Confusion matrix:")
+print(cm)
+print("Accuracy :", tp.sum() / cm.sum())
+print("Precision:", precision.mean())
+print("Recall   :", recall.mean())
+print("F1-score :", f1.mean())
+
+
+# ==========================================================
+# EXPERIMENT 4 : Image Caption Generation (CNN + LSTM)
+# ==========================================================
+
+from tensorflow.keras.preprocessing import image
+from tensorflow.keras.applications import VGG16
+from tensorflow.keras.applications.vgg16 import preprocess_input
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Dense, Input, Embedding, LSTM
+import numpy as np
+import os
+
+path = "imagenet/images"
+classes = sorted([c for c in os.listdir(path) if os.path.isdir(os.path.join(path, c))])[:10]
+
+paths = []
+caps = []
+for c in classes:
+    folder = os.path.join(path, c)
+    files = [f for f in os.listdir(folder) if f.lower().endswith((".jpg", ".jpeg", ".png"))]
+    for f in files[:100]:
+        paths.append(os.path.join(folder, f))
+        # class label -> text description
+        caps.append("a photo of a " + c.replace("_", " ").lower())
+
+# extract visual features using the CNN
+base = VGG16(weights="imagenet", include_top=False, pooling="avg")
+
+features = []
+for s in range(0, len(paths), 32):
+    batch = np.array([image.img_to_array(image.load_img(p, target_size=(224, 224)))
+                      for p in paths[s:s + 32]])
+    features.append(base.predict(preprocess_input(batch), verbose=0))
+features = np.concatenate(features)
+
+# tokenize and build vocabulary with special tokens
+words = sorted(set(w for cap in caps for w in cap.split()))
+word2idx = {"<pad>": 0, "<start>": 1, "<end>": 2}
+for w in words:
+    word2idx[w] = len(word2idx)
+idx2word = {v: k for k, v in word2idx.items()}
+vocab_size = len(word2idx)
+
+# convert captions to integer sequences: <start> words <end>
+seqs = [[word2idx["<start>"]] + [word2idx[w] for w in cap.split()] + [word2idx["<end>"]]
+        for cap in caps]
+max_len = max(len(s) for s in seqs)
+padded = np.zeros((len(seqs), max_len), dtype="int32")
+for k, s in enumerate(seqs):
+    padded[k, :len(s)] = s
+
+# decoder input: all words except last, target: all words except first (next word)
+dec_in = padded[:, :-1]
+dec_out = padded[:, 1:]
+
+# train / test split
+idx = np.random.permutation(len(paths))
+cut = int(0.8 * len(paths))
+tr, te = idx[:cut], idx[cut:]
+
+# CNN feature goes into the LSTM as its initial state
+img_in = Input(shape=(512,))
+seq_in = Input(shape=(max_len - 1,))
+
+h0 = Dense(256, activation="tanh")(img_in)
+c0 = Dense(256, activation="tanh")(img_in)
+
+emb = Embedding(vocab_size, 128, mask_zero=True)(seq_in)
+lstm = LSTM(256, return_sequences=True)(emb, initial_state=[h0, c0])
+out = Dense(vocab_size, activation="softmax")(lstm)
+
+model = Model([img_in, seq_in], out)
+model.compile(optimizer="adam", loss="sparse_categorical_crossentropy")
+model.fit([features[tr], dec_in[tr]], dec_out[tr], epochs=30, batch_size=16, verbose=2)
+
+# generate caption word by word
+def generate(feat):
+    seq = [word2idx["<start>"]]
+    for _ in range(max_len):
+        inp = np.zeros((1, max_len - 1), dtype="int32")
+        inp[0, :len(seq)] = seq
+        p = model.predict([feat[None], inp], verbose=0)
+        w = int(np.argmax(p[0, len(seq) - 1]))
+        if w == word2idx["<end>"]:
+            break
+        seq.append(w)
+    return " ".join(idx2word[k] for k in seq[1:])
+
+# captions for unseen images, compared with expected captions
+for j in np.random.choice(te, 5, replace=False):
+    g = generate(features[j])
+    print("Generated:", g)
+    print("Expected :", caps[j])
+    print("Match    :", g == caps[j])
+
+
+# ==========================================================
+# EXPERIMENT 5 : Text-to-Image Synthesis using Conditional GAN
+# ==========================================================
+
+from tensorflow.keras.preprocessing import image
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import (Dense, Input, Embedding, LSTM, Concatenate, Reshape,
+                                     Conv2D, Conv2DTranspose, BatchNormalization,
+                                     LeakyReLU, Flatten)
+import tensorflow as tf
+import numpy as np
+import matplotlib.pyplot as plt
+import os
+
+path = "imagenet/images"
+classes = sorted([c for c in os.listdir(path) if os.path.isdir(os.path.join(path, c))])[:5]
+
+imgs = []
+caps = []
+cls_id = []
+for k, c in enumerate(classes):
+    folder = os.path.join(path, c)
+    files = [f for f in os.listdir(folder) if f.lower().endswith((".jpg", ".jpeg", ".png"))]
+    for f in files[:100]:
+        im = image.load_img(os.path.join(folder, f), target_size=(64, 64))
+        imgs.append(image.img_to_array(im))
+        caps.append("a photo of a " + c.replace("_", " ").lower())
+        cls_id.append(k)
+
+# scale pixels to [-1, 1]
+imgs = np.array(imgs) / 127.5 - 1.0
+cls_id = np.array(cls_id)
+
+# text -> numbers
+words = sorted(set(w for cap in caps for w in cap.split()))
+word2idx = {"<pad>": 0}
+for w in words:
+    word2idx[w] = len(word2idx)
+vocab_size = len(word2idx)
+max_len = max(len(cap.split()) for cap in caps)
+
+def encode(cap):
+    s = np.zeros(max_len, dtype="int32")
+    for k, w in enumerate(cap.split()):
+        s[k] = word2idx.get(w, 0)
+    return s
+
+text = np.array([encode(c) for c in caps])
+
+# train / test split
+idx = np.random.permutation(len(imgs))
+cut = int(0.8 * len(imgs))
+tr, te = idx[:cut], idx[cut:]
+
+# simple text encoder: word embedding + LSTM
+def text_encoder():
+    t = Input(shape=(max_len,))
+    e = Embedding(vocab_size, 32, mask_zero=True)(t)
+    e = LSTM(64)(e)
+    return Model(t, e)
+
+noise_dim = 100
+
+# conditional generator: noise + text -> image
+def build_generator():
+    z = Input(shape=(noise_dim,))
+    t = Input(shape=(max_len,))
+    x = Concatenate()([z, text_encoder()(t)])
+    x = Dense(8 * 8 * 256)(x)
+    x = BatchNormalization()(x)
+    x = LeakyReLU(0.2)(x)
+    x = Reshape((8, 8, 256))(x)
+    x = Conv2DTranspose(128, 4, strides=2, padding="same")(x)
+    x = BatchNormalization()(x)
+    x = LeakyReLU(0.2)(x)
+    x = Conv2DTranspose(64, 4, strides=2, padding="same")(x)
+    x = BatchNormalization()(x)
+    x = LeakyReLU(0.2)(x)
+    x = Conv2DTranspose(3, 4, strides=2, padding="same", activation="tanh")(x)
+    return Model([z, t], x)
+
+# conditional discriminator: image + text -> real/fake
+def build_discriminator():
+    im = Input(shape=(64, 64, 3))
+    t = Input(shape=(max_len,))
+    x = Conv2D(64, 4, strides=2, padding="same")(im)
+    x = LeakyReLU(0.2)(x)
+    x = Conv2D(128, 4, strides=2, padding="same")(x)
+    x = BatchNormalization()(x)
+    x = LeakyReLU(0.2)(x)
+    x = Conv2D(256, 4, strides=2, padding="same")(x)
+    x = BatchNormalization()(x)
+    x = LeakyReLU(0.2)(x)
+    x = Flatten()(x)
+    x = Concatenate()([x, text_encoder()(t)])
+    x = Dense(1)(x)
+    return Model([im, t], x)
+
+G = build_generator()
+D = build_discriminator()
+
+bce = tf.keras.losses.BinaryCrossentropy(from_logits=True)
+g_opt = tf.keras.optimizers.Adam(2e-4, beta_1=0.5)
+d_opt = tf.keras.optimizers.Adam(2e-4, beta_1=0.5)
+
+# one adversarial training step
+@tf.function
+def train_step(real, txt):
+    noise = tf.random.normal((tf.shape(real)[0], noise_dim))
+
+    with tf.GradientTape() as gt, tf.GradientTape() as dt:
+        fake = G([noise, txt], training=True)
+        real_out = D([real, txt], training=True)
+        fake_out = D([fake, txt], training=True)
+
+        d_loss = bce(tf.ones_like(real_out), real_out) + bce(tf.zeros_like(fake_out), fake_out)
+        g_loss = bce(tf.ones_like(fake_out), fake_out)
+
+    d_opt.apply_gradients(zip(dt.gradient(d_loss, D.trainable_variables), D.trainable_variables))
+    g_opt.apply_gradients(zip(gt.gradient(g_loss, G.trainable_variables), G.trainable_variables))
+
+data = tf.data.Dataset.from_tensor_slices((imgs[tr].astype("float32"), text[tr]))
+data = data.shuffle(len(tr)).batch(32)
+
+for ep in range(100):
+    for real, txt in data:
+        train_step(real, txt)
+
+# generate images from text and compare with real ImageNet images
+n = len(classes)
+plt.figure(figsize=(2.5 * n, 5.5))
+for k, c in enumerate(classes):
+    cap = "a photo of a " + c.replace("_", " ").lower()
+    z = np.random.normal(size=(1, noise_dim)).astype("float32")
+    gen = G.predict([z, encode(cap)[None]], verbose=0)[0]
+
+    plt.subplot(2, n, k + 1)
+    plt.imshow((gen + 1) / 2)
+    plt.title("Generated\n" + cap, fontsize=8)
+    plt.axis("off")
+
+    real_idx = te[cls_id[te] == k][0]
+    plt.subplot(2, n, n + k + 1)
+    plt.imshow((imgs[real_idx] + 1) / 2)
+    plt.title("Real ImageNet", fontsize=8)
+    plt.axis("off")
+plt.show()
